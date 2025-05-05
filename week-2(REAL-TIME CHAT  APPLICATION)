@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.15/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io@4.7.5/client-dist/socket.io.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const ChatApp = () => {
+            const [messages, setMessages] = useState([]);
+            const [message, setMessage] = useState('');
+            const [username, setUsername] = useState('');
+            const [isConnected, setIsConnected] = useState(false);
+            const socketRef = useRef(null);
+            const messagesEndRef = useRef(null);
+
+            useEffect(() => {
+                socketRef.current = io('http://localhost:3000');
+
+                socketRef.current.on('connect', () => {
+                    setIsConnected(true);
+                });
+
+                socketRef.current.on('disconnect', () => {
+                    setIsConnected(false);
+                });
+
+                socketRef.current.on('message', (msg) => {
+                    setMessages((prev) => [...prev, msg]);
+                });
+
+                socketRef.current.on('messageHistory', (history) => {
+                    setMessages(history);
+                });
+
+                return () => {
+                    socketRef.current.disconnect();
+                };
+            }, []);
+
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages]);
+
+            const handleSendMessage = (e) => {
+                e.preventDefault();
+                if (message.trim() && username.trim() && isConnected) {
+                    const msg = {
+                        username,
+                        content: message,
+                        timestamp: new Date().toISOString(),
+                    };
+                    socketRef.current.emit('message', msg);
+                    setMessage('');
+                }
+            };
+
+            return (
+                <div className="flex flex-col h-screen bg-gray-100">
+                    <div className="bg-blue-600 text-white p-4">
+                        <h1 className="text-xl font-bold">Real-Time Chat</h1>
+                        <p className="text-sm">{isConnected ? 'Connected' : 'Disconnected'}</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4">
+                        {messages.map((msg, index) => (
+                            <div
+                                key={index}
+                                className={`mb-4 ${
+                                    msg.username === username ? 'text-right' : 'text-left'
+                                }`}
+                            >
+                                <div
+                                    className={`inline-block p-3 rounded-lg ${
+                                        msg.username === username
+                                            ? 'bg-blue-500 text-white'
+                                            : 'bg-white text-gray-800'
+                                    }`}
+                                >
+                                    <p className="text-sm font-bold">{msg.username}</p>
+                                    <p>{msg.content}</p>
+                                    <p className="text-xs text-gray-400">
+                                        {new Date(msg.timestamp).toLocaleTimeString()}
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                        <div ref={messagesEndRef} />
+                    </div>
+                    <div className="p-4 bg-white border-t">
+                        {!username ? (
+                            <div className="flex space-x-2">
+                                <input
+                                    type="text"
+                                    placeholder="Enter your username"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <button
+                                    onClick={() => setUsername(username.trim())}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                                    disabled={!username.trim()}
+                                >
+                                    Set Username
+                                </button>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSendMessage} className="flex space-x-2">
+                                <input
+                                    type="text"
+                                    placeholder="Type a message..."
+                                    value={message}
+                                    onChange={(e) => setMessage(e.target.value)}
+                                    className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    disabled={!isConnected}
+                                />
+                                <button
+                                    type="submit"
+                                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:bg-gray-400"
+                                    disabled={!message.trim() || !isConnected}
+                                >
+                                    Send
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<ChatApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
